@@ -46,7 +46,14 @@ public class CurseforgeApi(
             json(Json {
                 explicitNulls = false
                 coerceInputValues = true
+                ignoreUnknownKeys = true
             })
+        }
+
+        install(HttpTimeout){
+            requestTimeoutMillis = 10000
+            connectTimeoutMillis = 10000
+            socketTimeoutMillis = 10000
         }
     }
 
@@ -111,6 +118,7 @@ public class CurseforgeApi(
         return if (response.status == HttpStatusCode.OK) {
             response.body<CurseforgeResponse<CurseforgeMod>>().data
         } else {
+            error("Failed to get mod: ${response}")
             null
         }
     }

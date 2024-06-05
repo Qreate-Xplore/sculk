@@ -18,7 +18,7 @@ suspend fun downloadFileTemp(url: Url): File {
     return tempFile
 }
 
-suspend fun tryReq(url: Url, maxAttempts: Int = 3): ByteArray {
+suspend fun tryReq(url: Url, maxAttempts: Int = 10): ByteArray {
     var attempts = 0
     var lastException: Exception? = null
 

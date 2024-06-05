@@ -33,6 +33,12 @@ class Context(val terminal: Terminal) {
         install(ContentNegotiation) {
             json(json)
         }
+
+        install(HttpTimeout){
+            requestTimeoutMillis = 10000
+            connectTimeoutMillis = 10000
+            socketTimeoutMillis = 10000
+        }
     }
 
     val pistonMeta = PistonMeta(client)

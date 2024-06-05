@@ -82,10 +82,10 @@ suspend fun addCurseforgeFile(
     }
 
     val dir = getClassIdDir(mod.classId ?: 6)
-    val tempFile = downloadFileTemp(parseUrl(file.downloadUrl!!)).readBytes()
-    val sha1 = tempFile.digestSha1()
-    val sha512 = tempFile.digestSha512()
-    val murmur2 = tempFile.digestMurmur2()
+    //val tempFile = downloadFileTemp(parseUrl(file.downloadUrl!!)).readBytes()
+    val sha1 = file.hashes.first { it.algo == CurseforgeHashAlgo.Sha1 }.value
+    // val sha512 = tempFile.digestSha512()
+    // val murmur2 = tempFile.digestMurmur2()
 
     val path = manifestPath ?: "$dir/${mod.slug}.sculk.json"
 
@@ -99,7 +99,7 @@ suspend fun addCurseforgeFile(
             error("Existing manifest already has a Curseforge source (did you mean to use the update command?)")
         }
 
-        if (existingManifest.hashes.sha1 != sha1 || existingManifest.hashes.sha512 != sha512) {
+        if (existingManifest.hashes.sha1 != sha1 /*|| existingManifest.hashes.sha512 != sha512*/) {
             error("File hashes do not match for ${file.fileName}")
         }
 
@@ -111,9 +111,9 @@ suspend fun addCurseforgeFile(
     } else {
         FileManifest(
             filename = file.fileName, hashes = FileManifestHashes(
-                sha1 = sha1, sha512 = sha512, murmur2 = murmur2
+                sha1 = sha1, sha512 = ""/*sha512*/, murmur2 = 0//murmur2
             ),
-            fileSize = tempFile.size,
+            fileSize = file.fileLengthInBytes.toInt(),
             side = file.getSide().toSide(),
             sources = FileManifestSources(
                 curseforge = FileManifestCurseforgeSource(

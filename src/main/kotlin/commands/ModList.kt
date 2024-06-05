@@ -12,6 +12,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import tech.jamalam.Context
+import kotlin.plus
 
 class ModList : CliktCommand(name = "modlist", help = "Generate a markdown mod list") {
     private val file by argument().file().help("The file to write the modlist to")
@@ -41,30 +42,38 @@ class ModList : CliktCommand(name = "modlist", help = "Generate a markdown mod l
 
             launch { progress.execute() }
 
+            var i = 0
             for ((_, manifest) in ctx.pack.getManifests()) {
                 progress.advance(1)
                 progress.update { context = manifest.filename }
-                var title: String?
+                var title: String? = null
                 var description: String? = null
+                var url: String? = null
 
                 if (manifest.sources.modrinth != null) {
                     val project =
                         ctx.modrinth.getProject(manifest.sources.modrinth!!.projectId)!!
                     title = project.title
                     description = project.description
-                } else if (manifest.sources.curseforge != null) {
+                    url = "https://www.modrinth.com/mods/" + project.id
+                }
+                if (manifest.sources.curseforge != null) {
                     val project =
                         ctx.curseforge.getMod(manifest.sources.curseforge!!.projectId)!!
                     title = project.name
                     description = project.summary
-                } else {
+                    val curseUrl = "https://www.curseforge.com/projects/" + project.id
+                    url = (url?.plus(" | " + curseUrl) ?: curseUrl)
+                }
+                if (title == null) {
                     title = manifest.filename
                 }
-
+                i++
                 markdown += """
-                ## $title
+                ##[$i] $title
+                ($url)
                 ${"${description ?: "\n"}\n"}
-               
+                
              """.trimIndent()
             }
 

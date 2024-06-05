@@ -74,8 +74,15 @@ suspend fun addModrinthVersion(
     ignoreIfExists: Boolean = true,
     downloadDependencies: Boolean = true
 ): Boolean {
-    val modrinthFile = version.files.first { it.primary }
-    val tempFile = downloadFileTemp(parseUrl(modrinthFile.downloadUrl))
+    //ctx.terminal.info("${version.files}")
+    var modrinthFile : ModrinthVersionFile?
+    try {
+        val _modrinthFile = version.files.first { it.primary }
+        modrinthFile = _modrinthFile
+    } catch (e : NoSuchElementException){
+        val _modrinthFile = version.files.first()
+        modrinthFile = _modrinthFile
+    }
     val dir = version.loaders.first().getSaveDir()
 
     val path = manifestPath ?: "$dir/${project.slug}.sculk.json"
@@ -99,12 +106,13 @@ suspend fun addModrinthVersion(
 
         existingManifest
     } else {
+        //val tempFile = downloadFileTemp(parseUrl(modrinthFile.downloadUrl))
         FileManifest(
             filename = modrinthFile.filename, hashes = FileManifestHashes(
                 sha1 = modrinthFile.hashes.sha1,
                 sha512 = modrinthFile.hashes.sha512,
-                murmur2 = tempFile.readBytes().digestMurmur2()
-            ), fileSize = tempFile.readBytes().size, side = modrinthEnvTypePairToSide(
+                murmur2 = 0//tempFile.readBytes().digestMurmur2()
+            ), fileSize = modrinthFile.sizeInBytes.toInt(), side = modrinthEnvTypePairToSide(
                 project.clientSideSupport, project.serverSideSupport
             ), sources = FileManifestSources(
                 curseforge = null, modrinth = FileManifestModrinthSource(
@@ -115,6 +123,7 @@ suspend fun addModrinthVersion(
     }
 
     ctx.pack.setManifest(path, fileManifest)
+    ctx.pack.save(ctx.json)
     ctx.terminal.info("Added ${project.title} to manifest")
 
     if (dir == "mods" && downloadDependencies) { // only supporting mod dependencies for now

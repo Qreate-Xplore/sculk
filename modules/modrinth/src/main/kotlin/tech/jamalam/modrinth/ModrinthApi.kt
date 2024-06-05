@@ -30,7 +30,14 @@ public class ModrinthApi(
             json(Json {
                 explicitNulls = false
                 coerceInputValues = true
+                ignoreUnknownKeys = true
             })
+        }
+
+        install(HttpTimeout){
+            requestTimeoutMillis = 10000
+            connectTimeoutMillis = 10000
+            socketTimeoutMillis = 10000
         }
     }
 

@@ -20,6 +20,7 @@ private const val CURSEFORGE_MANIFEST_PATH: String = "manifest.json"
 private val json = Json {
     explicitNulls = false
     coerceInputValues = true
+    ignoreUnknownKeys = true
 }
 
 public fun createCurseforgePack(

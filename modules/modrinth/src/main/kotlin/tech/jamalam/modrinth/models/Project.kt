@@ -35,7 +35,7 @@ public data class ModrinthProject(
     public val followers: Int,
     public val status: ModrinthProjectStatus,
     @SerialName("requested_status") public val requestedStatus: ModrinthProjectRequestedStatus? = null,
-    @SerialName("moderator_message") public val moderatorMessage: String? = null,
+    //@SerialName("moderator_message") @Contextual() public val moderatorMessage: String? = null,
     @SerialName("thread_id") public val threadId: String? = null,
     @SerialName("monetization_status") public val monetizationStatus: ModrinthMonetizationStatus? = null,
     @SerialName("team") public val teamId: String,
@@ -48,7 +48,7 @@ public data class ModrinthProject(
     public val loaders: List<ModrinthLoader>,
     @SerialName("game_versions") public val gameVersions: List<String>,
     @SerialName("gallery") public val galleryImages: List<ModrinthGalleryImage>? = null,
-    @SerialName("body_url") private val bodyUrl: Nothing? = null,
+    //@SerialName("body_url") private val bodyUrl: Nothing? = null,
 )
 
 @Serializable
