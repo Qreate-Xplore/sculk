@@ -12,11 +12,13 @@ import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.mordant.animation.coroutines.animateInCoroutine
 import com.github.ajalt.mordant.animation.progress.advance
 import com.github.ajalt.mordant.widgets.progress.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
 import tech.jamalam.Context
 import tech.jamalam.pack.SerialFileManifest
 import tech.jamalam.pack.SerialPackManifest
@@ -36,9 +38,21 @@ class Install :
     override fun run() = runBlocking {
         coroutineScope {
             val ctx = Context.getOrCreate(terminal)
+            terminal.info("Getting pack manifest from $packLocation/manifest.sculk.json")
             val manifest = ctx.json.decodeFromString(
                 SerialPackManifest.serializer(), readFile("manifest.sculk.json")
             )
+            val installManifestFile = File(installLocation).resolve("install.sculk.json")
+            val installManifest = if (installManifestFile.exists()) {
+                ctx.json.decodeFromString(
+                    InstallManifest.serializer(), installManifestFile.readText()
+                )
+            } else {
+                InstallManifest(mutableListOf())
+            }
+            val installedItems = mutableListOf<String>()
+
+            terminal.info("Installing pack ${manifest.name} to $installLocation")
 
             val progress = progressBarContextLayout {
                 text(terminal.theme.info("Downloading files"))
@@ -68,8 +82,21 @@ class Install :
                 )
 
                 if (fileManifest.side != Side.Both) {
-                    if ((fileManifest.side == Side.ServerOnly && side == InstallSide.CLIENT) || (fileManifest.side == Side.ClientOnly && side == InstallSide.SERVER)) {
+                    // 'Server only' should still be installed on the client generally
+                    if (fileManifest.side == Side.ClientOnly && side == InstallSide.SERVER) {
                         terminal.info("Ignoring ${file.path} because it's not for the selected side ($side)")
+                        continue
+                    }
+                }
+
+                val fileFile =
+                    File(installLocation).resolve(file.path).resolveSibling(fileManifest.filename)
+
+                installedItems += fileFile.path.toString()
+
+                if (fileFile.exists()) {
+                    if (fileFile.readBytes().digestSha512() == fileManifest.hashes.sha512) {
+                        terminal.info("Skipping ${file.path} because it's already downloaded")
                         continue
                     }
                 }
@@ -84,11 +111,13 @@ class Install :
                     error("No valid source found for ${file.path}")
                 }
 
-                val fileFile =
-                    File(installLocation).resolve(file.path).resolveSibling(fileManifest.filename)
-
                 fileFile.parentFile.mkdirs()
-                val request = ctx.client.get(downloadLink)
+                val request = ctx.client.get(downloadLink) {
+                    timeout {
+                        // Some mods are large.
+                        requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
+                    }
+                }
                 fileFile.writeBytes(request.readBytes())
 
                 if (fileFile.readBytes().digestSha512() != fileManifest.hashes.sha512) {
@@ -115,10 +144,21 @@ class Install :
                 }
 
                 val fileFile = File(installLocation).resolve(file.path)
+                installedItems += fileFile.path.toString()
                 fileFile.parentFile.mkdirs()
                 fileFile.writeText(fileText)
                 terminal.info("Downloaded ${file.path}")
             }
+
+            for (previouslyInstalledItem in installManifest.sculkInstalledItems) {
+                if (previouslyInstalledItem !in installedItems) {
+                    terminal.info("Removing $previouslyInstalledItem as it is no longer part of the pack")
+                    File(installLocation).resolve(previouslyInstalledItem).delete()
+                }
+            }
+
+            installManifest.sculkInstalledItems = installedItems
+            installManifestFile.writeText(ctx.json.encodeToString(InstallManifest.serializer(), installManifest))
         }
     }
 
@@ -133,4 +173,9 @@ class Install :
     enum class InstallSide {
         CLIENT, SERVER
     }
+
+    @Serializable
+    data class InstallManifest(
+        var sculkInstalledItems: MutableList<String>,
+    )
 }

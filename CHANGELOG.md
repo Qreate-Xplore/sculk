@@ -1,8 +1,1 @@
-- Add help text to all commands and options.
-- Add SLF4J for logging.
-- Support for project types other than mods
-- Internal refactors
-- `sculk add list`
-- `sculk update`
-- `sculk link`
-- `sculk migrate`
+- fix(multimc): properly escape quotes in pre launch command

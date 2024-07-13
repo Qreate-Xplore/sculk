@@ -22,13 +22,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5 # v3.1.0
 
-      - name: gradlew installDist
-        run: ./gradlew installDist
-
-      - name: Zip distribution
-        run: |
-          cd build/install/sculk
-          zip -r ../../../sculk.zip .
+      - name: gradlew build
+        run: ./gradlew build
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -41,4 +36,29 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
           files: |
-            sculk.zip
+            build/libs/*.jar
+  update-nix-flake:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v27
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - run: deno run --allow-read --allow-write --allow-run --allow-net .github/workflows/update_nix_flake.ts
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update flake"
+          commit_user_name: GitHub Actions
+          commit_options: --no-verify --signoff
+          commit_author: GitHub Actions <actions@github.com>
+          branch: main
+          skip_dirty_check: false
+          skip_fetch: true

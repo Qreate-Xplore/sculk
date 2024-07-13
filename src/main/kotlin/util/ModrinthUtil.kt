@@ -17,14 +17,16 @@ private val MODRINTH_DEFAULT_LOADERS = listOf(
 suspend fun addModrinthProject(
     ctx: Context,
     query: String,
+    ignoreIfExists: Boolean = false,
+    skipDependencies: Boolean = false
 ) {
     val directMatch = ctx.modrinth.getProject(query)
 
     val projectSlug = directMatch?.slug ?: run {
         val projects = ctx.modrinth.search(
-            query, loaders = listOf(
-                ctx.pack.getManifest().loader.type.toModrinth(), *MODRINTH_DEFAULT_LOADERS
-            ), gameVersions = listOf(ctx.pack.getManifest().minecraft)
+            query,
+            loaders = getAllLoaders(ctx.pack.getManifest().loader.type),
+            gameVersions = listOf(ctx.pack.getManifest().minecraft)
         ).hits
 
         if (projects.isEmpty()) {
@@ -36,7 +38,7 @@ suspend fun addModrinthProject(
     }
 
     addModrinthProject(
-        ctx, directMatch ?: ctx.modrinth.getProject(projectSlug)!!, false
+        ctx, directMatch ?: ctx.modrinth.getProject(projectSlug)!!, ignoreIfExists, skipDependencies
     )
 }
 
@@ -44,26 +46,27 @@ private suspend fun addModrinthProject(
     ctx: Context,
     project: ModrinthProject,
     ignoreIfExists: Boolean = true,
+    skipDependencies: Boolean = false
 ): Boolean {
     val versions = runBlocking {
         ctx.modrinth.getProjectVersions(
-            project.slug, loaders = listOf(
-                ctx.pack.getManifest().loader.type.toModrinth(),
-                *if (ctx.pack.getManifest().loader.type == ModLoader.Quilt) {
-                    arrayOf(ModrinthLoader.Fabric)
-                } else {
-                    emptyArray()
-                },
-                *MODRINTH_DEFAULT_LOADERS
-            ), gameVersions = listOf(ctx.pack.getManifest().minecraft)
+            project.slug,
+            loaders = getAllLoaders(ctx.pack.getManifest().loader.type),
+            gameVersions = listOf(ctx.pack.getManifest().minecraft)
         )
     }.sortedBy {
         it.publishedTime
     }.reversed()
 
-    val version = versions.elementAtOrNull(0)
-        ?: error("No valid versions found for ${project.title} (Minecraft: ${ctx.pack.getManifest().minecraft}, loader: ${ctx.pack.getManifest().loader.type})")
-    return addModrinthVersion(ctx, project, version, ignoreIfExists = ignoreIfExists)
+    // Prefer mod versions over datapack versions
+    val nonDatapackVersions = versions.filter { it.loaders.none { loader -> loader == ModrinthLoader.Datapack } }
+    val version = if (nonDatapackVersions.isNotEmpty()) {
+        nonDatapackVersions[0]
+    } else {
+        versions.elementAtOrNull(0)
+    } ?: error("No valid versions found for ${project.title} (Minecraft: ${ctx.pack.getManifest().minecraft}, loader: ${ctx.pack.getManifest().loader.type})")
+
+    return addModrinthVersion(ctx, project, version, ignoreIfExists = ignoreIfExists, downloadDependencies = !skipDependencies)
 }
 
 suspend fun addModrinthVersion(
@@ -153,10 +156,6 @@ suspend fun addModrinthVersion(
                     )
 
                     if (prompt.ask() == "Yes") {
-                        ctx.dependencyGraph.addDependency(
-                            "$dir/${dependencyProject.slug}.sculk.json", path
-                        )
-
                         addModrinthProject(ctx, dependencyProject)
                     }
                 }
@@ -182,7 +181,7 @@ suspend fun updateModrinthProject(
 
     val versions = ctx.modrinth.getProjectVersions(
         idOrSlug = mod.id,
-        loaders = listOf(ctx.pack.getManifest().loader.type.toModrinth()),
+        loaders = getAllLoaders(ctx.pack.getManifest().loader.type),
         gameVersions = listOf(ctx.pack.getManifest().minecraft)
     ).sortedBy {
         it.publishedTime
@@ -212,27 +211,33 @@ suspend fun updateModrinthProject(
     return true
 }
 
+// Modrinth made a mistake with their V3 migration, the upshot being that we need to assume
+// that all mods need to be loaded on both sides. Hopefully mods have their metadata set correctly
+// so that they only load on the correct side.
+// See https://discord.com/channels/734077874708938864/1103139849852162158/1251553321433432205
 fun modrinthEnvTypePairToSide(clientSide: ModrinthEnvSupport, serverSide: ModrinthEnvSupport) =
     when (clientSide to serverSide) {
-        ModrinthEnvSupport.Unsupported to ModrinthEnvSupport.Required -> Side.ServerOnly
-        ModrinthEnvSupport.Unsupported to ModrinthEnvSupport.Optional -> Side.ClientOnly
-        ModrinthEnvSupport.Required to ModrinthEnvSupport.Unsupported -> Side.ClientOnly
-        ModrinthEnvSupport.Optional to ModrinthEnvSupport.Unsupported -> Side.ServerOnly
+//        ModrinthEnvSupport.Unsupported to ModrinthEnvSupport.Required -> Side.ServerOnly
+//        ModrinthEnvSupport.Unsupported to ModrinthEnvSupport.Optional -> Side.ClientOnly
+//        ModrinthEnvSupport.Required to ModrinthEnvSupport.Unsupported -> Side.ClientOnly
+//        ModrinthEnvSupport.Optional to ModrinthEnvSupport.Unsupported -> Side.ServerOnly
         else -> Side.Both
     }
 
 fun ModrinthPackFileEnv.toSide() = modrinthEnvTypePairToSide(clientSupport, serverSupport)
 
 fun Side.toModrinthEnvServerSupport() = when (this) {
-    Side.ServerOnly -> ModrinthEnvSupport.Required
-    Side.ClientOnly -> ModrinthEnvSupport.Unsupported
-    Side.Both -> ModrinthEnvSupport.Required
+//    Side.ServerOnly -> ModrinthEnvSupport.Required
+//    Side.ClientOnly -> ModrinthEnvSupport.Unsupported
+//    Side.Both -> ModrinthEnvSupport.Required
+    else -> ModrinthEnvSupport.Required
 }
 
 fun Side.toModrinthEnvClientSupport() = when (this) {
-    Side.ServerOnly -> ModrinthEnvSupport.Unsupported
-    Side.ClientOnly -> ModrinthEnvSupport.Required
-    Side.Both -> ModrinthEnvSupport.Required
+//    Side.ServerOnly -> ModrinthEnvSupport.Unsupported
+//    Side.ClientOnly -> ModrinthEnvSupport.Required
+//    Side.Both -> ModrinthEnvSupport.Required
+    else -> ModrinthEnvSupport.Required
 }
 
 fun ModrinthLoader.toModLoader(): ModLoader = when (this) {
@@ -263,3 +268,13 @@ fun ModrinthLoader.getSaveDir(): String = when (this) {
     ModrinthLoader.Vanilla -> "resourcepacks"
     else -> error("Unsupported Modrinth loader: $this")
 }
+
+fun getAllLoaders(loader: ModLoader): List<ModrinthLoader> = listOf(
+    loader.toModrinth(),
+    *if (loader == ModLoader.Quilt) {
+        arrayOf(ModrinthLoader.Fabric)
+    } else {
+        emptyArray()
+    },
+    *MODRINTH_DEFAULT_LOADERS
+)

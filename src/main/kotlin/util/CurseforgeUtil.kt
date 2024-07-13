@@ -9,6 +9,8 @@ import tech.jamalam.pack.*
 suspend fun findAndAddCurseforgeProject(
     ctx: Context,
     query: String,
+    ignoreIfExists: Boolean = false,
+    skipDependencies: Boolean = false,
 ) {
     val directMatches = ctx.curseforge.search(
         slug = query,
@@ -38,13 +40,14 @@ suspend fun findAndAddCurseforgeProject(
             .let { mods.find { p -> p.name == it } }!!
     }
 
-    addCurseforgeProject(ctx, mod, false)
+    addCurseforgeProject(ctx, mod, ignoreIfExists, skipDependencies)
 }
 
 suspend fun addCurseforgeProject(
     ctx: Context,
     mod: CurseforgeMod,
     ignoreIfExists: Boolean = true,
+    skipDependencies: Boolean = false,
 ): Boolean {
     if (mod.allowModDistribution == false) {
         ctx.terminal.warning("${mod.name} does not allow distribution")
@@ -65,7 +68,7 @@ suspend fun addCurseforgeProject(
     }
 
     val file = files[0] // Most recent version
-    return addCurseforgeFile(ctx, mod, file, ignoreIfExists = ignoreIfExists)
+    return addCurseforgeFile(ctx, mod, file, ignoreIfExists = ignoreIfExists, downloadDependencies = !skipDependencies)
 }
 
 suspend fun addCurseforgeFile(

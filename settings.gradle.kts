@@ -14,4 +14,5 @@ dependencyResolutionManagement {
 
 include(":modules:curseforge")
 include(":modules:modrinth")
-include(":modules:url-builder")
+include(":modules:multimc")
+include(":modules:util")
